@@ -322,7 +322,7 @@
                                     break;
                                 }
                             }
-                            this.provinceCode = this.filteredProvnices[j - 4 >= 0 ? j - 4 : 0].code;
+                            this.provinceCode = this.filteredProvnices[j !== this.filteredProvnices.length + 1 && j - 4 >= 0 ? j - 4 : 0].code;
                             this.$nextTick(function () {
                                 this.$el.querySelector('[data-province-selector] input:checked').closest('label').scrollIntoView({block: "nearest"});
                             });
@@ -375,7 +375,7 @@
                                     break;
                                 }
                             }
-                            this.areaCode = this.filteredAreas[j !== this.filteredAreas.length && j - 4 >= 0 ? j - 4 : 0].code;
+                            this.areaCode = this.filteredAreas[j !== this.filteredAreas.length + 1 && j - 4 >= 0 ? j - 4 : 0].code;
                             this.$nextTick(function () {
                                 this.$el.querySelector('[data-area-selector] input:checked').closest('label').scrollIntoView({block: "nearest"});
                             });
