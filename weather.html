@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta content="IE=edge,Chrome=1" http-equiv="X-UA-Compatible">
+    <meta name="renderer" content="webkit"/>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>weather</title>
+    <link href="https://static.hdslb.com/images/akari.jpg" rel="icon">
+    <link href="https://cdn.jsdelivr.net/npm/normalize.css@8.0/normalize.min.css" rel="stylesheet">
+    <style>
+        .weather-select-zone {
+            font-size: large;
+            display: flex;
+            flex-wrap: wrap;
+            margin: 8pt;
+        }
+
+        .weather-select-zone-column {
+            padding: 0 8pt;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .select-ui {
+            min-width: 10rem;
+            height: 12rem;
+            position: relative;
+            overflow-y: scroll;
+            font-size: large;
+            border-width: 1pt;
+            border-style: solid;
+            border-color: grey;
+        }
+
+        .select-ui label {
+            padding: 1pt;
+            display: flex;
+            align-items: stretch;
+        }
+
+        .select-ui input[type=radio] {
+            appearance: none;
+            /*display: none;*/
+        }
+
+
+        .selected-label {
+            color: white;
+            background-color: dodgerblue;
+        }
+
+        .weather-line-1 {
+            margin: 8pt;
+            display: flex;
+            flex-wrap: wrap;
+            font-size: 12pt;
+        }
+
+        .weather-line-2 {
+            margin: 8pt;
+            display: grid;
+            gap: 8pt;
+            grid-template-columns: repeat(auto-fill, minmax(140pt, 1fr));
+            font-size: 12pt;
+        }
+
+        .weather-line-3 {
+            margin: 8pt;
+            display: grid;
+            gap: 8pt;
+            grid-template-columns: repeat(auto-fill, minmax(68pt, 1fr));
+            font-size: 12pt;
+        }
+
+        .weather-line-4 {
+            margin: 8pt;
+            display: grid;
+            gap: 8pt;
+            grid-template-columns: repeat(auto-fill, minmax(64pt, 1fr));
+            font-size: 12pt;
+        }
+
+        .weather-column-container {
+            display: flex;
+        }
+
+        .weather-sub-column {
+            min-width: 60pt;
+        }
+
+        .weather-sub-column + .weather-sub-column {
+            margin-left: 10pt;
+        }
+
+        .fi1 {
+            margin: 8pt;
+        }
+
+        .fi2 {
+            padding: 8pt;
+            border-radius: 8pt;
+            background: linear-gradient(170deg, greenyellow, gold, deepskyblue);
+            border: 2pt solid silver;
+        }
+
+        .fi2:first-of-type {
+            border: 2pt solid chocolate;
+            box-shadow: 6pt 3pt 3pt chocolate;
+        }
+
+        .fi3 {
+            padding: 8pt;
+            border-radius: 8pt;
+            background: lightseagreen;
+        }
+
+        .fi4 {
+            padding: 8pt;
+            border-radius: 8pt;
+            background: salmon;
+        }
+
+        .nl2 {
+            margin-bottom: 6pt;
+        }
+
+        .publish-time {
+            margin-top: 6pt;
+            font-size: smaller;
+        }
+
+        .loading {
+            transform: scale(.96, .96);
+            transform-origin: center center;
+            filter: opacity(.3) blur(.3em) brightness(150%);
+        }
+
+        .loaded {
+            transition: filter .4s, transform .4s;
+        }
+
+        .fade-enter-active, .fade-leave-active {
+            transition: opacity 1.25s;
+        }
+
+        .fade-enter, .fade-leave-to {
+            opacity: 0;
+        }
+
+        .btn {
+            align-self: flex-end;
+            border-radius: 7.2pt;
+            color: antiquewhite;
+            background: linear-gradient(rgb(255, 127, 0), rgb(254, 230, 0));
+            font-weight: bold;
+            border-width: 1.2pt;
+            padding: 3pt 11.2pt;
+            font-size: 12pt;
+            text-shadow: -1px 1px goldenrod, 1px 1px goldenrod, 1px -1px goldenrod, -1px -1px goldenrod;
+            transition: filter .48s;
+        }
+
+        .btn:disabled {
+            filter: grayscale(80%);
+        }
+    </style>
+    <script src="https://webapi.amap.com/maps?v=1.4.15&key=45f6edb7afe1292a77e3df9e75293902" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.13/lodash.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6/dist/vue.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2/min/moment.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2/locale/zh-cn.js" defer></script>
+    <script>
+        let cf = function (url) {
+            return caches.match(url)
+                .then(function (r) {
+                    return r ? r : fetch(url);
+                })
+                .then(function (r) {
+                    caches.open('v1').then((function (c) {
+                        c.put(url, r);
+                    }));
+                    return r.clone();
+                });
+        };
+        let sf = function (url) {
+            let item = localStorage.getItem(url);
+            if (item) {
+                return Promise.resolve(JSON.parse(item));
+            } else {
+                return fetch(url)
+                    .then(function (r) {
+                        return r.json();
+                    })
+                    .then(function (r) {
+                        localStorage.setItem(url, JSON.stringify(r));
+                        return r;
+                    });
+            }
+        };
+        if (location.protocol === 'https:') {
+            sf = cf;
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            let weatherApi = new URL('http://www.nmc.cn/rest/weather');
+
+            new Vue({
+                el: '#app',
+                data: function () {
+                    return {
+                        privateState: {
+                            abortController: null,
+                            pCounter: 0,
+                            switch: 0,
+                            transitionTs: 0,
+                            locatedArea: false
+                        },
+                        provinces: [],
+                        areas: [],
+                        weather: null,
+                        provinceCode: 'ABJ', areaCode: '54511',
+                        currentCity: null,
+                        showLoading: true,
+                        provinceFilter: '',
+                        areaFilter: ''
+                    };
+                },
+                computed: {
+                    reversedPassedchart: function () {
+                        return this.weather && this.weather.data.passedchart && this.weather.data.passedchart.slice().reverse() || null;
+                    },
+                    filteredProvnices: function () {
+                        if (this.provinceFilter.length > 0) {
+                            return this.provinces.filter((v) => {
+                                return v.name.indexOf(this.provinceFilter) >= 0;
+                            })
+                        } else {
+                            return this.provinces;
+                        }
+                    },
+                    filteredAreas: function () {
+                        if (this.areaFilter.length > 0) {
+                            return this.areas.filter((v) => {
+                                return v.city.indexOf(this.areaFilter) >= 0;
+                            })
+                        } else {
+                            return this.areas;
+                        }
+                    }
+                },
+                created: function () {
+                    this._debouncedReadWeather = _.debounce(this.readWeather, 270);
+                },
+                mounted: function () {
+                    this.readAreas();
+                    this.readWeather();
+
+                    Promise.all([
+                        sf('http://www.nmc.cn/rest/province/all')
+                            .then((r) => {
+                                this.provinces.splice.apply(this.provinces, [0, this.provinces.length].concat(r));
+                                // this.provinces.splice(0, this.provinces.length, ...r);
+                            }),
+                        new Promise((resolve, reject) => {
+                            AMap.plugin('AMap.CitySearch', function () {
+                                let citySearch = new AMap.CitySearch();
+                                citySearch.getLocalCity(function (status, result) {
+                                    if (status === 'complete' && result.info === 'OK') {
+                                        resolve(result);
+                                    } else {
+                                        console.warn('locating failed');
+                                        resolve({error: true});
+                                    }
+                                })
+                            });
+                        })
+                    ])
+                        .then((resolved) => {
+                            let currentCity = resolved[1];
+                            if (!currentCity.error) {
+                                this.currentCity = currentCity;
+
+                                let province0 = this.provinces.filter((province) => {
+                                    return province.name === this.currentCity.province;
+                                });
+                                if (province0.length) {
+                                    this.privateState.locatedArea = true;
+                                    this.provinceCode = province0[0].code;
+                                }
+                            }
+                        });
+                },
+                filters: {
+                    dateFormat: (date, format) => {
+                        return moment(date).format(format);
+                    },
+                    date2: (date) => {
+                        return moment(date).format('M月D日 ddd');
+                    },
+                    hour: (date) => {
+                        return moment(date).format('DD日HH时');
+                    },
+                },
+                methods: {
+                    startTransition: function () {
+                        this.privateState.transitionTs = Date.now();
+                        this.showLoading = true;
+                    },
+                    endTransition: function () {
+                        new Promise((r) => setTimeout(r, Math.min(400, 400 - (Date.now() - this.privateState.transitionTs))))
+                            .then(() => {
+                                this.showLoading = false;
+                            });
+                    },
+                    onProvincePageUp: function () {
+                        if (this.filteredProvnices.length) {
+                            let j = 0;
+                            for (let p of this.filteredProvnices) {
+                                j++;
+                                if (p.code === this.provinceCode) {
+                                    break;
+                                }
+                            }
+                            this.provinceCode = this.filteredProvnices[j - 4 >= 0 ? j - 4 : 0].code;
+                            this.$nextTick(function () {
+                                this.$el.querySelector('[data-province-selector] input:checked').closest('label').scrollIntoView({block: "nearest"});
+                            });
+                        }
+                    },
+                    onProvincePageDown: function () {
+                        if (this.filteredProvnices.length) {
+                            let i = 0, j = 0;
+                            for (let p of this.filteredProvnices) {
+                                j++;
+                                if (p.code === this.provinceCode || i) {
+                                    i++;
+                                    if (i >= 4) {
+                                        break;
+                                    }
+                                }
+                            }
+                            if (i > 0) {
+                                this.provinceCode = this.filteredProvnices[j - 1].code;
+                            } else {
+                                this.provinceCode = this.filteredProvnices[this.filteredProvnices.length - 1].code;
+                            }
+                            this.$nextTick(function () {
+                                this.$el.querySelector('[data-province-selector] input:checked').closest('label').scrollIntoView({block: "nearest"});
+                            });
+                        }
+                    },
+                    onProvinceHome: function () {
+                        if (this.filteredProvnices.length) {
+                            this.provinceCode = this.filteredProvnices[0].code;
+                            this.$nextTick(function () {
+                                this.$el.querySelector('[data-province-selector] input:checked').closest('label').scrollIntoView({block: "nearest"});
+                            });
+                        }
+                    },
+                    onProvinceEnd: function () {
+                        if (this.filteredProvnices.length) {
+                            this.provinceCode = this.filteredProvnices[this.filteredProvnices.length - 1].code;
+                            this.$nextTick(function () {
+                                this.$el.querySelector('[data-province-selector] input:checked').closest('label').scrollIntoView({block: "nearest"});
+                            });
+                        }
+                    },
+                    onAreaPageUp: function () {
+                        if (this.filteredAreas.length) {
+                            let j = 0;
+                            for (let a of this.filteredAreas) {
+                                j++;
+                                if (a.code === this.areaCode) {
+                                    break;
+                                }
+                            }
+                            this.areaCode = this.filteredAreas[j !== this.filteredAreas.length && j - 4 >= 0 ? j - 4 : 0].code;
+                            this.$nextTick(function () {
+                                this.$el.querySelector('[data-area-selector] input:checked').closest('label').scrollIntoView({block: "nearest"});
+                            });
+                        }
+                    },
+                    onAreaPageDown: function () {
+                        if (this.filteredAreas.length) {
+                            let i = 0, j = 0;
+                            for (let p of this.filteredAreas) {
+                                j++;
+                                if (p.code === this.areaCode || i) {
+                                    i++;
+                                    if (i >= 4) {
+                                        break;
+                                    }
+                                }
+                            }
+                            if (i > 0) {
+                                this.areaCode = this.filteredAreas[j - 1].code;
+                            } else {
+                                this.areaCode = this.filteredAreas[this.filteredAreas.length - 1].code;
+                            }
+                            this.$nextTick(function () {
+                                this.$el.querySelector('[data-area-selector] input:checked').closest('label').scrollIntoView({block: "nearest"});
+                            });
+                        }
+                    },
+                    onAreaHome: function () {
+                        if (this.filteredAreas.length) {
+                            this.areaCode = this.filteredAreas[0].code;
+                            this.$nextTick(function () {
+                                this.$el.querySelector('[data-area-selector] input:checked').closest('label').scrollIntoView({block: "nearest"});
+                            });
+                        }
+                    },
+                    onAreaEnd: function () {
+                        if (this.filteredAreas.length) {
+                            this.areaCode = this.filteredAreas[this.filteredAreas.length - 1].code;
+                            this.$nextTick(function () {
+                                this.$el.querySelector('[data-area-selector] input:checked').closest('label').scrollIntoView({block: "nearest"});
+                            });
+                        }
+                    },
+                    readAreas: function () {
+                        if (this.provinceCode) {
+                            let pCounter = ++this.privateState.pCounter;
+                            sf(new URL('http://www.nmc.cn/rest/province/' + this.provinceCode).href)
+                                .then((r) => {
+                                    if (pCounter === this.privateState.pCounter) {
+                                        this.areas.splice.apply(this.areas, [0, this.areas.length].concat(r));
+                                        // this.areas.splice(0, this.areas.length, ...r);
+                                    }
+                                });
+                        }
+                    },
+                    readWeather: function () {
+                        if (this.areaCode) {
+                            weatherApi.searchParams.set('stationid', this.areaCode);
+                            this.abortController && this.abortController.abort();
+                            this.abortController = new AbortController();
+                            fetch(weatherApi.href, {signal: this.abortController.signal})
+                                .then((r) => r.json())
+                                .then((r) => {
+                                    this.weather = r;
+                                }).finally(() => {
+                                this.endTransition();
+                            });
+                        }
+                    },
+                    debouncedReadWeather: function () {
+                        if (this.areaCode && this.areaCode.length) {
+                            this.startTransition();
+                            this._debouncedReadWeather();
+                        }
+                    }
+                },
+                watch: {
+                    provinceCode: function () {
+                        this.readAreas();
+                    },
+                    areas: function () {
+                        this.$nextTick(function () {
+                            let selectedArea = document.querySelector('[data-area-selector] input:checked');
+                            if (selectedArea) {
+                                this.$el.querySelector('[data-area-selector]').scrollTo(0, selectedArea.closest('label').offsetTop - 10);
+                            } else {
+                                this.$el.querySelector('[data-area-selector]').scrollTo(0, 0);
+                            }
+                        });
+
+                        if (this.privateState.locatedArea) {
+                            this.privateState.locatedArea = false;
+                            let t = this.currentCity.city.replace(/(市|特别行政区)$/, '');
+                            let t0 = this.areas.filter(function (v) {
+                                return v.city === t;
+                            });
+                            if (t0.length && this.areaCode !== t0[0].code) {
+                                this.areaCode = t0[0].code;
+                            }
+                        }
+                    },
+                    areaCode: function () {
+                        this.debouncedReadWeather();
+                    }
+                },
+                template: document.getElementById('weather-all-template')
+            });
+        });
+    </script>
+</head>
+<body>
+<div id="app"></div>
+<template id="weather-all-template">
+    <section>
+        <div class="weather-select-zone">
+            <div class="weather-select-zone-column">
+                <label>省份</label>
+                <input placeholder="筛选省份" v-model.trim="provinceFilter">
+                <div class="select-ui" data-province-selector v-on:keydown.end.stop.prevent="onProvinceEnd"
+                     v-on:keydown.home.stop.prevent="onProvinceHome"
+                     v-on:keydown.page-down.stop.prevent="onProvincePageDown"
+                     v-on:keydown.page-up.stop.prevent="onProvincePageUp">
+                    <label v-bind:class="{'selected-label':provinceCode===provnice.code}" v-bind:title="provnice.name"
+                           v-for="provnice in filteredProvnices">
+                        <input name="selectedProvince" type="radio" v-bind:value="provnice.code" v-model="provinceCode">{{provnice.name}}</label>
+                </div>
+            </div>
+            <div class="weather-select-zone-column">
+                <label>地区</label>
+                <input placeholder="筛选地区" v-model.trim="areaFilter">
+                <div class="select-ui" data-area-selector v-on:keydown.end.stop.prevent="onAreaEnd"
+                     v-on:keydown.home.stop.prevent="onAreaHome" v-on:keydown.page-down.stop.prevent="onAreaPageDown"
+                     v-on:keydown.page-up.stop.prevent="onAreaPageUp">
+                    <label v-bind:class="{'selected-label':areaCode===area.code}"
+                           v-bind:title="area.city" v-for="area in filteredAreas">
+                        <input name="selectedArea" type="radio" v-bind:value="area.code" v-model="areaCode">{{area.city}}</label>
+                </div>
+            </div>
+            <button class="btn" v-bind:disabled="showLoading" v-on:click.passive="debouncedReadWeather">刷新</button>
+        </div>
+        <section class="weather-line-1 loaded" v-bind:class="{loading:showLoading}" v-if="weather">
+            <div class="fi1" v-if="typeof weather.data.real === 'object'">
+                <div>省份: {{weather.data.real.station.province}}</div>
+                <div>城市: {{weather.data.real.station.city}}</div>
+                <div>来源: <a target="weather-source"
+                            v-bind:href="'http://www.nmc.cn'+weather.data.real.station.url">中央气象台</a>
+                </div>
+                <div>当前温度: {{weather.data.real.weather.temperature}}℃</div>
+                <div>当前气压: {{weather.data.real.weather.airpressure}}hPa</div>
+                <div>当前相对湿度: {{weather.data.real.weather.humidity}}%</div>
+                <div>当前降水量: {{weather.data.real.weather.rain}}mm</div>
+                <div v-if="weather.data.real.weather.img < 8888">
+                    当前天气: {{weather.data.real.weather.info}}
+                </div>
+                <div v-if="weather.data.real.weather.img < 8888"><img
+                        v-bind:alt="weather.data.real.weather.info"
+                        v-bind:src="'http://image.nmc.cn/assets/img/w/40x40/3/'+weather.data.real.weather.img+'.png'"
+                        v-bind:title="weather.data.real.weather.info"></div>
+                <div>体感温度: {{weather.data.real.weather.feelst}}℃</div>
+                <div>当前风向: {{weather.data.real.wind.direct}}</div>
+                <div>当前风力: {{weather.data.real.wind.power}}</div>
+                <div class="publish-time">发布于 {{weather.data.real.publish_time}}</div>
+            </div>
+            <div class="fi1" v-if="typeof weather.data.air === 'object'">
+                <div>空气质量: {{weather.data.air.text}}</div>
+                <div class="publish-time">发布于 {{weather.data.air.forecasttime}}</div>
+                s
+            </div>
+        </section>
+        <section class="weather-line-2 loaded" v-bind:class="{loading:showLoading}" v-if="weather">
+            <div class="fi2" v-for="item in weather.data.predict.detail">
+                <div>{{item.date | date2}}</div>
+                <div class="weather-column-container">
+                    <div class="nl2 weather-sub-column" v-if="item.day.weather.temperature < 8888">
+                        <div><img v-bind:alt="item.day.weather.info"
+                                  v-bind:src="'http://image.nmc.cn/assets/img/w/35x35/1/'+item.day.weather.img+'.png'"
+                                  v-bind:title="item.day.weather.info"></div>
+                        <div>日间</div>
+                        <div>{{item.day.weather.info}}</div>
+                        <div>{{item.day.weather.temperature}}℃</div>
+                        <div>{{item.day.wind.direct}}</div>
+                        <div>{{item.day.wind.power}}</div>
+                    </div>
+                    <div class="weather-sub-column" v-if="item.night.weather.temperature < 8888">
+                        <div><img v-bind:alt="item.night.weather.info"
+                                  v-bind:src="'http://image.nmc.cn/assets/img/w/35x35/2/'+item.night.weather.img+'.png'"
+                                  v-bind:title="item.night.weather.info"></div>
+                        <div>夜间</div>
+                        <div>{{item.night.weather.info}}</div>
+                        <div>{{item.night.weather.temperature}}℃</div>
+                        <div>{{item.night.wind.direct}}</div>
+                        <div>{{item.night.wind.power}}</div>
+                    </div>
+                </div>
+                <div class="publish-time">发布于 {{item.pt}}</div>
+            </div>
+        </section>
+        <section class="weather-line-3 loaded" v-bind:class="{loading:showLoading}"
+                 v-if="weather && reversedPassedchart">
+            <div v-for="item in reversedPassedchart" class="fi3">
+                <div>{{item.time | hour}}</div>
+                <div v-if="item.rain1h < 8888">{{item.rain1h}}mm</div>
+                <div v-if="item.temperature < 8888">{{item.temperature}}℃</div>
+                <div v-if="item.humidity < 8888">{{item.humidity}}%</div>
+                <div v-if="item.pressure < 8888">{{item.pressure}}hPa</div>
+                <div v-if="item.windDirection < 8888">{{item.windDirection}}°</div>
+                <div v-if="item.windSpeed < 8888">{{item.windSpeed}}m/s</div>
+            </div>
+        </section>
+        <section class="loaded" v-bind:class="{loading:showLoading}"
+                 v-if="weather && weather.data.climate">
+            <div>{{weather.data.climate.time}}</div>
+        </section>
+        <section class="weather-line-4 loaded" v-bind:class="{loading:showLoading}"
+                 v-if="weather && weather.data.climate && weather.data.climate.month[0].maxTemp!==''">
+            <div v-for="item in weather.data.climate.month" class="fi4">
+                <div>{{item.month}}月</div>
+                <div>{{item.maxTemp}}℃</div>
+                <div>{{item.minTemp}}℃</div>
+                <div>{{item.precipitation}}mm</div>
+            </div>
+        </section>
+    </section>
+</template>
+</body>
+</html>
